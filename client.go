@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,8 +13,9 @@ import (
 	"sync"
 	"time"
 
+	"context"
+
 	"github.com/gogap/errors"
-	"github.com/mreiferson/go-httpclient"
 )
 
 const (
@@ -47,7 +49,7 @@ type MNSClient interface {
 }
 
 type AliMNSClient struct {
-	Timeout     int64
+	timeout     time.Duration
 	url         string
 	credential  Credential
 	accessKeyId string
@@ -86,24 +88,20 @@ func (p *AliMNSClient) SetProxy(url string) {
 	p.proxyURL = url
 }
 
+func (p *AliMNSClient) SetTimeout(timeout int) {
+	p.timeout = time.Duration(timeout) * time.Second
+}
+
 func (p *AliMNSClient) initClient() {
 
 	p.clientLocker.Lock()
 	defer p.clientLocker.Unlock()
 
-	timeoutInt := DefaultTimeout
-
-	if p.Timeout > 0 {
-		timeoutInt = p.Timeout
-	}
-
-	timeout := time.Second * time.Duration(timeoutInt)
-
-	transport := &httpclient.Transport{
-		Proxy:                 p.proxy,
-		ConnectTimeout:        time.Second * 3,
-		RequestTimeout:        timeout,
-		ResponseHeaderTimeout: timeout + time.Second,
+	transport := &http.Transport{
+		Dial: (&net.Dialer{
+			Timeout: 3 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout: 3 * time.Second,
 	}
 
 	p.client = &http.Client{Transport: transport}
@@ -186,6 +184,11 @@ func (p *AliMNSClient) Send(method Method, headers map[string]string, message in
 	}
 
 	return
+}
+
+func (p *AliMNSClient) ctx() context.Context {
+	ctx, _ := context.WithTimeout(context.Background(), p.timeout)
+	return ctx
 }
 
 func initMNSErrors() {

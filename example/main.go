@@ -2,11 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
-	"time"
 
-	"github.com/gogap/ali_mns"
-	"github.com/gogap/logs"
+	"github.com/jmuyuyang/ali_mns"
 )
 
 type appConf struct {
@@ -33,33 +32,5 @@ func main() {
 		conf.AccessKeySecret)
 
 	queue := ali_mns.NewMNSQueue(conf.Queue, client)
-
-	respChan := make(chan ali_mns.MessageReceiveResponse)
-	errChan := make(chan error)
-	go func() {
-		for {
-			select {
-			case resp := <-respChan:
-				{
-					logs.Pretty("message:", string(resp.MessageBody))
-					if conf.Delete {
-						if e := queue.DeleteMessage(resp.ReceiptHandle); e != nil {
-							logs.Error(e)
-						}
-					}
-				}
-			case err := <-errChan:
-				{
-					logs.Error(err)
-				}
-			}
-		}
-
-	}()
-
-	queue.ReceiveMessage(respChan, errChan)
-	for {
-		time.Sleep(time.Second * 1)
-	}
-
+	fmt.Println(queue.ReceiveMessage())
 }
