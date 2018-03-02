@@ -29,30 +29,22 @@ type AliMNSQueue interface {
 }
 
 type MNSQueue struct {
-	name     string
-	client   MNSClient
-	stopChan chan bool
-	decoder  MNSDecoder
+	topic   string
+	client  MNSClient
+	decoder MNSDecoder
 }
 
-func NewMNSQueue(name string, client MNSClient, qps ...int32) AliMNSQueue {
-	if name == "" {
+func NewMNSQueue(client MNSClient) AliMNSQueue {
+	if topic == "" {
 		panic("ali_mns: queue name could not be empty")
 	}
 
 	queue := new(MNSQueue)
 	queue.client = client
-	queue.name = name
-	queue.stopChan = make(chan bool)
 	queue.decoder = NewAliMNSDecoder()
 
-	var attr QueueAttribute
-	if _, err := send(client, queue.decoder, GET, nil, nil, "queues/"+name, &attr); err != nil {
-		panic(err)
-	}
-
 	proxyURL := ""
-	queueProxyEnvKey := PROXY_PREFIX + strings.Replace(strings.ToUpper(name), "-", "_", -1)
+	queueProxyEnvKey := PROXY_PREFIX + strings.Replace(strings.ToUpper("mns_queue"), "-", "_", -1)
 	if url := os.Getenv(queueProxyEnvKey); url != "" {
 		proxyURL = url
 	}
@@ -62,12 +54,16 @@ func NewMNSQueue(name string, client MNSClient, qps ...int32) AliMNSQueue {
 	return queue
 }
 
-func (p *MNSQueue) Name() string {
-	return p.name
+func (p *MNSQueue) SetTopic(topic string) {
+	p.topic = topic
+}
+
+func (p *MNSQueue) Topic() string {
+	return p.topic
 }
 
 func (p *MNSQueue) SendMessage(message MessageSendRequest) (resp MessageSendResponse, err error) {
-	_, err = send(p.client, p.decoder, POST, nil, message, fmt.Sprintf("queues/%s/%s", p.name, "messages"), &resp)
+	_, err = send(p.client, p.decoder, POST, nil, message, fmt.Sprintf("queues/%s/%s", p.topic, "messages"), &resp)
 	return
 }
 
@@ -81,14 +77,14 @@ func (p *MNSQueue) BatchSendMessage(messages ...MessageSendRequest) (resp BatchM
 		batchRequest.Messages = append(batchRequest.Messages, message)
 	}
 
-	_, err = send(p.client, p.decoder, POST, nil, batchRequest, fmt.Sprintf("queues/%s/%s", p.name, "messages"), &resp)
+	_, err = send(p.client, p.decoder, POST, nil, batchRequest, fmt.Sprintf("queues/%s/%s", p.topic, "messages"), &resp)
 	return
 }
 
 func (p *MNSQueue) ReceiveMessage(waitseconds ...int64) (MessageReceiveResponse, error) {
-	resource := fmt.Sprintf("queues/%s/%s", p.name, "messages")
+	resource := fmt.Sprintf("queues/%s/%s", p.topic, "messages")
 	if waitseconds != nil && len(waitseconds) == 1 && waitseconds[0] >= 0 {
-		resource = fmt.Sprintf("queues/%s/%s?waitseconds=%d", p.name, "messages", waitseconds[0])
+		resource = fmt.Sprintf("queues/%s/%s?waitseconds=%d", p.topic, "messages", waitseconds[0])
 	}
 
 	resp := MessageReceiveResponse{}
@@ -101,9 +97,9 @@ func (p *MNSQueue) BatchReceiveMessage(numOfMessages int32, waitseconds ...int64
 		numOfMessages = DefaultNumOfMessages
 	}
 
-	resource := fmt.Sprintf("queues/%s/%s?numOfMessages=%d", p.name, "messages", numOfMessages)
+	resource := fmt.Sprintf("queues/%s/%s?numOfMessages=%d", p.topic, "messages", numOfMessages)
 	if waitseconds != nil && len(waitseconds) == 1 && waitseconds[0] >= 0 {
-		resource = fmt.Sprintf("queues/%s/%s?numOfMessages=%d&waitseconds=%d", p.name, "messages", numOfMessages, waitseconds[0])
+		resource = fmt.Sprintf("queues/%s/%s?numOfMessages=%d&waitseconds=%d", p.topic, "messages", numOfMessages, waitseconds[0])
 	}
 
 	resp := BatchMessageReceiveResponse{}
@@ -112,7 +108,7 @@ func (p *MNSQueue) BatchReceiveMessage(numOfMessages int32, waitseconds ...int64
 }
 
 func (p *MNSQueue) PeekMessage() (MessageReceiveResponse, error) {
-	resource := fmt.Sprintf("queues/%s/%s?peekonly=true", p.name, "messages")
+	resource := fmt.Sprintf("queues/%s/%s?peekonly=true", p.topic, "messages")
 	resp := MessageReceiveResponse{}
 	_, err := send(p.client, p.decoder, GET, nil, nil, resource, &resp)
 	return resp, err
@@ -124,12 +120,12 @@ func (p *MNSQueue) BatchPeekMessage(numOfMessages int32) (BatchMessageReceiveRes
 	}
 
 	resp := BatchMessageReceiveResponse{}
-	_, err := send(p.client, p.decoder, GET, nil, nil, fmt.Sprintf("queues/%s/%s?numOfMessages=%d&peekonly=true", p.name, "messages", numOfMessages), &resp)
+	_, err := send(p.client, p.decoder, GET, nil, nil, fmt.Sprintf("queues/%s/%s?numOfMessages=%d&peekonly=true", p.topic, "messages", numOfMessages), &resp)
 	return resp, err
 }
 
 func (p *MNSQueue) DeleteMessage(receiptHandle string) (err error) {
-	_, err = send(p.client, p.decoder, DELETE, nil, nil, fmt.Sprintf("queues/%s/%s?ReceiptHandle=%s", p.name, "messages", receiptHandle), nil)
+	_, err = send(p.client, p.decoder, DELETE, nil, nil, fmt.Sprintf("queues/%s/%s?ReceiptHandle=%s", p.topic, "messages", receiptHandle), nil)
 	return
 }
 
@@ -144,11 +140,11 @@ func (p *MNSQueue) BatchDeleteMessage(receiptHandles ...string) (err error) {
 		handlers.ReceiptHandles = append(handlers.ReceiptHandles, handler)
 	}
 
-	_, err = send(p.client, p.decoder, DELETE, nil, handlers, fmt.Sprintf("queues/%s/%s", p.name, "messages"), nil)
+	_, err = send(p.client, p.decoder, DELETE, nil, handlers, fmt.Sprintf("queues/%s/%s", p.topic, "messages"), nil)
 	return
 }
 
 func (p *MNSQueue) ChangeMessageVisibility(receiptHandle string, visibilityTimeout int64) (resp MessageVisibilityChangeResponse, err error) {
-	_, err = send(p.client, p.decoder, PUT, nil, nil, fmt.Sprintf("queues/%s/%s?ReceiptHandle=%s&VisibilityTimeout=%d", p.name, "messages", receiptHandle, visibilityTimeout), &resp)
+	_, err = send(p.client, p.decoder, PUT, nil, nil, fmt.Sprintf("queues/%s/%s?ReceiptHandle=%s&VisibilityTimeout=%d", p.topic, "messages", receiptHandle, visibilityTimeout), &resp)
 	return
 }
