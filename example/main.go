@@ -31,6 +31,11 @@ func main() {
 		conf.AccessKeyId,
 		conf.AccessKeySecret)
 
-	queue := ali_mns.NewMNSQueue(conf.Queue, client)
+	queue := ali_mns.NewMNSQueue(client)
+	queue.SetTopic(conf.Queue)
+	msg := ali_mns.MessageSendRequest{
+		MessageBody: ali_mns.Base64Bytes([]byte("body")),
+	}
+	fmt.Println(queue.SendMessage(msg))
 	fmt.Println(queue.ReceiveMessage())
 }

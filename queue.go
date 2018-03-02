@@ -16,7 +16,8 @@ const (
 )
 
 type AliMNSQueue interface {
-	Name() string
+	Topic() string
+	SetTopic(string)
 	SendMessage(message MessageSendRequest) (resp MessageSendResponse, err error)
 	BatchSendMessage(messages ...MessageSendRequest) (resp BatchMessageSendResponse, err error)
 	ReceiveMessage(waitseconds ...int64) (MessageReceiveResponse, error)
@@ -35,10 +36,6 @@ type MNSQueue struct {
 }
 
 func NewMNSQueue(client MNSClient) AliMNSQueue {
-	if topic == "" {
-		panic("ali_mns: queue name could not be empty")
-	}
-
 	queue := new(MNSQueue)
 	queue.client = client
 	queue.decoder = NewAliMNSDecoder()
