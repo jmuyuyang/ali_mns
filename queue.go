@@ -51,6 +51,10 @@ func NewMNSQueue(client MNSClient) AliMNSQueue {
 	return queue
 }
 
+func (p *MNSClient) GetClient() MNSClient {
+	return p.client
+}
+
 func (p *MNSQueue) SetTopic(topic string) {
 	p.topic = topic
 }

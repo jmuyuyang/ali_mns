@@ -10,18 +10,15 @@ import (
 )
 
 type AliQueueManager interface {
-	CreateQueue(endpoint string, queueName string, delaySeconds int32, maxMessageSize int32, messageRetentionPeriod int32, visibilityTimeout int32, pollingWaitSeconds int32) (err error)
-	SetQueueAttributes(endpoint string, queueName string, delaySeconds int32, maxMessageSize int32, messageRetentionPeriod int32, visibilityTimeout int32, pollingWaitSeconds int32) (err error)
-	GetQueueAttributes(endpoint string, queueName string) (attr QueueAttribute, err error)
-	DeleteQueue(endpoint string, queueName string) (err error)
-	ListQueue(endpoint string, nextMarker string, retNumber int32, prefix string) (queues Queues, err error)
+	CreateQueue(queueName string, delaySeconds int32, maxMessageSize int32, messageRetentionPeriod int32, visibilityTimeout int32, pollingWaitSeconds int32) (err error)
+	SetQueueAttributes(queueName string, delaySeconds int32, maxMessageSize int32, messageRetentionPeriod int32, visibilityTimeout int32, pollingWaitSeconds int32) (err error)
+	GetQueueAttributes(queueName string) (attr QueueAttribute, err error)
+	DeleteQueue(queueName string) (err error)
+	ListQueue(nextMarker string, retNumber int32, prefix string) (queues Queues, err error)
 }
 
 type MNSQueueManager struct {
-	credential      Credential
-	accessKeyId     string
-	accessKeySecret string
-
+	client  MNSClient
 	decoder MNSDecoder
 }
 
@@ -73,11 +70,10 @@ func checkPollingWaitSeconds(pollingWaitSeconds int32) (err error) {
 	return
 }
 
-func NewMNSQueueManager(accessKeyId, accessKeySecret string) AliQueueManager {
+func NewMNSQueueManager(client MNSClient) AliQueueManager {
 	return &MNSQueueManager{
-		accessKeyId:     accessKeyId,
-		accessKeySecret: accessKeySecret,
-		decoder:         new(AliMNSDecoder),
+		client:  client,
+		decoder: new(AliMNSDecoder),
 	}
 }
 
@@ -100,7 +96,7 @@ func checkAttributes(delaySeconds int32, maxMessageSize int32, messageRetentionP
 	return
 }
 
-func (p *MNSQueueManager) CreateQueue(endpoint string, queueName string, delaySeconds int32, maxMessageSize int32, messageRetentionPeriod int32, visibilityTimeout int32, pollingWaitSeconds int32) (err error) {
+func (p *MNSQueueManager) CreateQueue(queueName string, delaySeconds int32, maxMessageSize int32, messageRetentionPeriod int32, visibilityTimeout int32, pollingWaitSeconds int32) (err error) {
 	queueName = strings.TrimSpace(queueName)
 
 	if err = checkQueueName(queueName); err != nil {
@@ -123,10 +119,8 @@ func (p *MNSQueueManager) CreateQueue(endpoint string, queueName string, delaySe
 		PollingWaitSeconds:     pollingWaitSeconds,
 	}
 
-	cli := NewAliMNSClient(endpoint, p.accessKeyId, p.accessKeySecret)
-
 	var code int
-	if code, err = send(cli, p.decoder, PUT, nil, &message, "queues/"+queueName, nil); err != nil {
+	if code, err = send(p.client, p.decoder, PUT, nil, &message, "queues/"+queueName, nil); err != nil {
 		return
 	}
 
@@ -148,7 +142,7 @@ func (p *MNSQueueManager) CreateQueue(endpoint string, queueName string, delaySe
 	return
 }
 
-func (p *MNSQueueManager) SetQueueAttributes(endpoint string, queueName string, delaySeconds int32, maxMessageSize int32, messageRetentionPeriod int32, visibilityTimeout int32, pollingWaitSeconds int32) (err error) {
+func (p *MNSQueueManager) SetQueueAttributes(queueName string, delaySeconds int32, maxMessageSize int32, messageRetentionPeriod int32, visibilityTimeout int32, pollingWaitSeconds int32) (err error) {
 	queueName = strings.TrimSpace(queueName)
 
 	if err = checkQueueName(queueName); err != nil {
@@ -171,44 +165,34 @@ func (p *MNSQueueManager) SetQueueAttributes(endpoint string, queueName string, 
 		PollingWaitSeconds:     pollingWaitSeconds,
 	}
 
-	cli := NewAliMNSClient(endpoint, p.accessKeyId, p.accessKeySecret)
-
-	_, err = send(cli, p.decoder, PUT, nil, &message, fmt.Sprintf("queues/%s?metaoverride=true", queueName), nil)
+	_, err = send(p.client, p.decoder, PUT, nil, &message, fmt.Sprintf("queues/%s?metaoverride=true", queueName), nil)
 	return
 }
 
-func (p *MNSQueueManager) GetQueueAttributes(endpoint string, queueName string) (attr QueueAttribute, err error) {
+func (p *MNSQueueManager) GetQueueAttributes(queueName string) (attr QueueAttribute, err error) {
+	queueName = strings.TrimSpace(queueName)
+
+	if err = checkQueueName(queueName); err != nil {
+		return
+	}
+	_, err = send(p.client, p.decoder, GET, nil, nil, "queues/"+queueName, &attr)
+
+	return
+}
+
+func (p *MNSQueueManager) DeleteQueue(queueName string) (err error) {
 	queueName = strings.TrimSpace(queueName)
 
 	if err = checkQueueName(queueName); err != nil {
 		return
 	}
 
-	cli := NewAliMNSClient(endpoint, p.accessKeyId, p.accessKeySecret)
-
-	_, err = send(cli, p.decoder, GET, nil, nil, "queues/"+queueName, &attr)
+	_, err = send(p.client, p.decoder, DELETE, nil, nil, "queues/"+queueName, nil)
 
 	return
 }
 
-func (p *MNSQueueManager) DeleteQueue(endpoint string, queueName string) (err error) {
-	queueName = strings.TrimSpace(queueName)
-
-	if err = checkQueueName(queueName); err != nil {
-		return
-	}
-
-	cli := NewAliMNSClient(endpoint, p.accessKeyId, p.accessKeySecret)
-
-	_, err = send(cli, p.decoder, DELETE, nil, nil, "queues/"+queueName, nil)
-
-	return
-}
-
-func (p *MNSQueueManager) ListQueue(endpoint string, nextMarker string, retNumber int32, prefix string) (queues Queues, err error) {
-
-	cli := NewAliMNSClient(endpoint, p.accessKeyId, p.accessKeySecret)
-
+func (p *MNSQueueManager) ListQueue(nextMarker string, retNumber int32, prefix string) (queues Queues, err error) {
 	header := map[string]string{}
 
 	marker := strings.TrimSpace(nextMarker)
@@ -232,7 +216,7 @@ func (p *MNSQueueManager) ListQueue(endpoint string, nextMarker string, retNumbe
 		header["x-mns-prefix"] = prefix
 	}
 
-	_, err = send(cli, p.decoder, GET, header, nil, "queues", &queues)
+	_, err = send(p.client, p.decoder, GET, header, nil, "queues", &queues)
 
 	return
 }
