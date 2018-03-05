@@ -68,17 +68,8 @@ func (p *MNSQueue) SendMessage(message MessageSendRequest) (resp MessageSendResp
 	return
 }
 
-func (p *MNSQueue) BatchSendMessage(messages ...MessageSendRequest) (resp BatchMessageSendResponse, err error) {
-	if messages == nil || len(messages) == 0 {
-		return
-	}
-
-	batchRequest := BatchMessageSendRequest{}
-	for _, message := range messages {
-		batchRequest.Messages = append(batchRequest.Messages, message)
-	}
-
-	_, err = send(p.client, p.decoder, POST, nil, batchRequest, fmt.Sprintf("queues/%s/%s", p.topic, "messages"), &resp)
+func (p *MNSQueue) BatchSendMessage(batchMessage BatchMessageSendRequest) (resp BatchMessageSendResponse, err error) {
+	_, err = send(p.client, p.decoder, POST, nil, batchMessage, fmt.Sprintf("queues/%s/%s", p.topic, "messages"), &resp)
 	return
 }
 
