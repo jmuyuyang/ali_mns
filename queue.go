@@ -16,8 +16,9 @@ const (
 )
 
 type AliMNSQueue interface {
-	Topic() string
+	GetTopic() string
 	SetTopic(string)
+	GetClient() MNSClient
 	SendMessage(message MessageSendRequest) (resp MessageSendResponse, err error)
 	BatchSendMessage(batchMessage BatchMessageSendRequest) (resp BatchMessageSendResponse, err error)
 	ReceiveMessage(waitseconds ...int64) (MessageReceiveResponse, error)
@@ -51,7 +52,7 @@ func NewMNSQueue(client MNSClient) AliMNSQueue {
 	return queue
 }
 
-func (p *MNSClient) GetClient() MNSClient {
+func (p *MNSQueue) GetClient() MNSClient {
 	return p.client
 }
 
@@ -59,7 +60,7 @@ func (p *MNSQueue) SetTopic(topic string) {
 	p.topic = topic
 }
 
-func (p *MNSQueue) Topic() string {
+func (p *MNSQueue) GetTopic() string {
 	return p.topic
 }
 
