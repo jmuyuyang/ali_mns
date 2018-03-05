@@ -46,6 +46,7 @@ const (
 type MNSClient interface {
 	Send(method Method, headers map[string]string, message interface{}, resource string) (resp *http.Response, err error)
 	SetProxy(url string)
+	SetTimeout(timeout int)
 }
 
 type AliMNSClient struct {
