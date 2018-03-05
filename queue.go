@@ -19,7 +19,7 @@ type AliMNSQueue interface {
 	Topic() string
 	SetTopic(string)
 	SendMessage(message MessageSendRequest) (resp MessageSendResponse, err error)
-	BatchSendMessage(messages ...MessageSendRequest) (resp BatchMessageSendResponse, err error)
+	BatchSendMessage(batchMessage BatchMessageSendRequest) (resp BatchMessageSendResponse, err error)
 	ReceiveMessage(waitseconds ...int64) (MessageReceiveResponse, error)
 	BatchReceiveMessage(numOfMessages int32, waitseconds ...int64) (BatchMessageReceiveResponse, error)
 	PeekMessage() (MessageReceiveResponse, error)
